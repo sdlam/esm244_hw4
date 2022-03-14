@@ -1,0 +1,146 @@
+---
+title: "Homework 4 Task 3"
+author: "Sarah Lam"
+date: "3/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(here)
+library(textdata)
+library(tidytext)
+library(pdftools)
+library(knitr)
+library(plotly)
+library(ggplot2)
+library(grid)
+```
+
+##TASK 3: Text wrangling and analysis (coder’s choice)
+
+### Overview
+This task analyzed the script from the Broadway musical Les Miserables based on the novel of the same name by Victor Hugo. The script is organized by musical number and then word counts and a sentiment analysis are calculated to compare each song.
+
+### Les Miserables Musical Songs - A comparison
+
+```{r}
+les_mis_stage <- pdf_text(here("data", "les_mis_stage.pdf"))
+
+stage_lines <- data.frame(les_mis_stage) %>% #separate the lines of script 
+  mutate(page = 1:n()) %>% 
+  mutate(full_text = str_split(les_mis_stage, pattern = '\\n')) %>% 
+  unnest(full_text) %>% 
+  mutate(full_text = str_squish(full_text))
+```
+
+### Musical Script Tidying
+
+```{r}
+les_mis_songs <- stage_lines %>% 
+  mutate(song = ifelse(str_detect(full_text, "SONG"), full_text, NA)) %>% 
+  fill(song, .direction = 'down') %>% 
+  mutate(song = str_replace_all(song, pattern = "SONG ", replacement = ""))
+```
+
+#### Word count by Song
+
+```{r}
+song_words <- les_mis_songs %>% 
+  unnest_tokens(word, full_text, token = "words") %>% 
+  select(-les_mis_stage)  
+song_wordcount <- song_words %>% 
+  count(song, word) 
+
+stop_words <- stop_words
+
+song_words_clean <- song_words %>% 
+  anti_join(stop_words, by = 'word') %>% 
+  mutate(word = str_remove_all(word, pattern = "[:punct:]"))
+
+song_nonstop_counts <- song_words_clean %>% 
+  count(song, word)
+```
+
+### Find top 5 words for each song
+
+```{r, fig.width = 10, fig.height = 10}
+top_5_words <- song_nonstop_counts %>% 
+  group_by(song) %>% 
+  arrange(-n) %>% 
+  slice(1:5) %>% 
+  ungroup() 
+
+ggplot(data = top_5_words) +
+  geom_col(aes(x = n,
+               y = word),
+           fill = "cadetblue") +
+  facet_wrap( ~song, 
+               scales = 'free') +
+  labs(x = "Lyric",
+       y = "Occurances",
+       title = "Most Common Words in Les Miserables the Musical",
+       caption = "Figure 1. Most common works in each song of Les Miserables the musical.") +
+  theme(panel.spacing.x = unit(1, "lines"),
+                         panel.spacing.y = unit(1, "lines")) +
+  theme_minimal()
+```
+
+** Figure 1.** 
+
+
+### Sentiment Analysis
+
+```{r}
+les_mis_nrc <- song_words_clean %>% 
+  inner_join(get_sentiments('nrc')) 
+
+song_nrc_counts <- les_mis_nrc %>% 
+  count(song, sentiment) 
+```
+
+### Tracklist NRC Sentiment Analysis
+
+```{r, fig.width = 9, fig.height = 9}
+ggplot(data = song_nrc_counts,
+       aes(x = sentiment, 
+           y = n)) +
+  geom_col(fill = 'cadetblue') +
+  facet_wrap( ~song, scales = "fixed") +
+  coord_flip() +
+  labs(y = "Amount of NRC Words",
+       x = "NRC Sentiment",
+       title = "NRC Sentiment Analysis of Les Miserables",
+       caption = "Figure 3. NRC sentiment analysis of the lyrics in each song from the popular musical Les Miserables.") +
+  theme_minimal()
+```
+ 
+** Figure 2.** 
+
+
+```{r, fig.width = 9, fig.height = 9}
+les_mis_afinn <- song_words_clean %>% 
+  inner_join(get_sentiments('afinn'),
+             by = 'word') 
+   
+les_mis_afinn_means <- les_mis_afinn %>% 
+  group_by(song) %>% 
+  summarize(mean_affin = mean(value))
+
+ggplot(data = les_mis_afinn_means,
+       aes(x = fct_rev(factor(song)),
+           y = mean_affin)) +
+  geom_col(fill = "cadetblue") +
+  coord_flip() +
+  labs(y = "Mean Afinn Value",
+       x = "Musical Number",
+       title = "Afinn Values for Les Miserables") +
+  theme_minimal()
+```
+ 
+** Figure 2.** Average Afinn values for each musical number in the Broadway musical Les Miserables.
+
+
+### Synopsis
+

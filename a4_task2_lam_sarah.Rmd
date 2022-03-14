@@ -1,0 +1,139 @@
+---
+title: "Homework 4 Task 2"
+author: "Sarah Lam"
+date: "3/3/2022"
+output: html_document
+output: 
+  html_document:
+    theme: flatly
+    code_folding: hide
+---
+
+```{r setup, include=FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(tsibble)
+library(feasts)
+library(broom)
+library(fable)
+library(lubridate)
+```
+## Overview 
+
+TASK 2: Willamette Falls fish passage time series summary
+The goal of this task is to create a single beautiful, customized RMarkdown document to explore time series data in 3 parts, based on this Willamette Falls fish passage data.
+Data were shared by and accessed from Columbia River DART (Data Access in Real Time).
+
+```{r}
+#read in data
+fish_passing <- read_csv(here("data", "willamette_fish_passage.csv")) %>% 
+  clean_names()
+```
+
+Tab 1: Original time series
+A finalized, static graph of adult passage for coho, jack coho, and steelhead salmon (you decide if these all occupy the same panel, or if they are in separate panels). Add a figure caption. Replace NA values with zero. 
+2 - 3 bullet points summarizing major patterns / notable trends in the salmon passage time series data
+```{r}
+#create time series
+fish_ts <- fish_passing %>% 
+  clean_names() %>% 
+  mutate_all(funs(ifelse(is.na(.), 0, .))) %>% 
+  mutate(date = mdy(date)) %>% 
+  select(date, coho, jack_coho, steelhead) %>% 
+  as_tsibble(key = NULL,index = date)
+
+fish_ts_pivot <- fish_ts %>% 
+  pivot_longer(c(coho, jack_coho, steelhead),
+               names_to = "species",
+               values_to = "count") %>% 
+   mutate(species = case_when(
+    species == 'coho' ~ "Coho",
+    species == 'jack_coho' ~ "Jack Coho",
+    species == 'steelhead' ~ "Steelhead"))
+```
+
+```{r}
+#plot time series 
+ggplot(data = fish_ts_pivot,
+       aes(x = date,
+           y = count)) +
+  geom_line(aes(color = species)) +
+  labs(x = 'Date',
+       y = 'Number of Fish',
+       caption = "**Figure 1.** This figure shows fish ladder use at the Willanette Falls ladder by Coho, Jack Coho, and Steelhead as counts by month between 2001 and 2010.",
+       title = "Salmon Species Use of Willamette Falls Fish Ladder")
+```
+
+## Analysis Conclusions
+  - Steelhead are the most consistent users of the fish ladder
+  - Coho had the largest ladder us in 2010
+  - Jack Coho species is the most infrequent user of the fish ladder, or the data had a hard time capturing their usage.
+
+
+## Seasonal Analysis
+Tab 2: Seasonplots
+A finalized seasonplot for each species (coho, jack coho, steelhead) in its own panel. You can either facet_wrap/facet_grid, or use patchwork or cowplot, to make the figure. Add a caption.
+Add 2 - 3 bullet points summarizing the major trends you see in the seasonplots.
+```{r}
+### create a finalized seasonplot for each species in its own panel (patchwork)
+#steelhead_season <- salmon_ts %>% 
+ # gg_season(y = steelhead,
+  #          pal = viridis(10),
+   #         show.legend = FALSE)
+# coho_season <- salmon_ts %>% 
+ # gg_season(y = coho,
+    #        pal = viridis(10),
+     #       show.legend = FALSE)
+# jack_coho_season <- salmon_ts %>% 
+  # gg_season(y = jack_coho,
+        #    pal = viridis(10)) 
+salmon_ts_long %>% 
+  gg_season(y = count,
+            pal = magma(10)) +
+  labs(y = "Amount of Fish",
+       x = "Month",
+       color = 'Year',
+       title = "Salmon Ladder Use by Season",
+       caption = "PUT CAPTION HERE (CITATION)")
+```
+
+## Analysis Conclusions
+  - Steelhead salmon use the fish ladder more from January - July than August - December.
+  - Both Jack Coho and Coho only use the ladder in the fall months, specifically around October.
+  - None of the 3 salmon species use the ladder frequently during November and December. 
+
+## Annual Species Count
+Tab 3: Annual counts by species
+A finalized figure of annual totals for fish passage, for each of the 3 species (coho, jack coho, steelhead). You decide if this is in a single panel, or multiple panels. Add a figure caption. 
+Add 2 - 3 bullet points summarizing major trends you see in the annual totals by species from 2000 - 2010.
+Here’s the general idea for the layout (top “Overview” section, with the three tabs containing your visualizations below): 
+```{r}
+salmon_ts_year <- 
+  salmon %>% 
+  janitor::clean_names() %>% 
+  mutate_all(funs(ifelse(is.na(.), 0, .))) %>% 
+  mutate(date = lubridate::mdy(date),
+         year = year(date)) %>% 
+    pivot_longer(c(steelhead, coho, jack_coho),
+               names_to = "fish",
+               values_to = "count") %>% 
+  group_by(year, fish) %>% 
+  summarize(yearly_count = sum(count))
+ggplot(data = salmon_ts_year, aes(x = year, y = yearly_count)) +
+  geom_line(aes(color = fish)) +
+  scale_fill_manual(values = c('purple4', 'blue', 'salmon')) +
+  scale_x_continuous(breaks = c(2001, 2003, 2005, 2007, 2009)) +
+  labs(title = "Annual Counts of Salmon Species",
+       x = "Year",
+       y = "Amount of Species",
+       fill = "Salmon Species",
+       caption = "Figure 3. Annual amount of salmon species to use 
+       the fish ladder in XX (CITATION HERE).")
+```
+ 
+
+
+
